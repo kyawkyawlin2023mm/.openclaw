@@ -10,7 +10,8 @@ if (!tgToken || !aiKey) {
 else {
     const bot = new telegraf_1.Telegraf(tgToken);
     const genAI = new generative_ai_1.GoogleGenerativeAI(aiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Try using 'gemini-pro' which is very stable
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     bot.start((ctx) => {
         ctx.reply('Welcome! I am your AI assistant. Ask me anything.');
     });
