@@ -1,155 +1,39 @@
-import { Telegraf, Context } from 'telegraf';
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
-import dotenv from 'dotenv';
+import { Telegraf } from 'telegraf';
 
-dotenv.config();
+const tgToken = process.env.TELEGRAM_BOT_TOKEN;
+const orKey = process.env.OPENROUTER_API_KEY;
 
-/* ============================
-   ENV VALIDATION
-============================ */
+if (!tgToken || !orKey) {
+  console.log('Error: Tokens are missing');
+} else {
+  const bot = new Telegraf(tgToken);
 
-const { TELEGRAM_BOT_TOKEN, GEMINI_API_KEY } = process.env;
+  bot.start((ctx) => ctx.reply('Clawbot is ready! (OpenRouter version)'));
 
-if (!TELEGRAM_BOT_TOKEN) {
-  throw new Error('Missing TELEGRAM_BOT_TOKEN');
+  bot.on('text', async (ctx) => {
+    try {
+      await ctx.sendChatAction('typing');
+      
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + orKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "google/gemini-2.0-flash-exp:free",
+          "messages": [{ "role": "user", "content": ctx.message.text }]
+        })
+      });
+
+      const data: any = await response.json();
+      const replyText = data.choices[0].message.content;
+      await ctx.reply(replyText);
+    } catch (error) {
+      console.error('AI Error:', error);
+      ctx.reply('I am having trouble with the AI service.');
+    }
+  });
+
+  bot.launch().then(() => console.log('Bot is running...'));
 }
-
-if (!GEMINI_API_KEY) {
-  throw new Error('Missing GEMINI_API_KEY');
-}
-
-/* ============================
-   INIT SERVICES
-============================ */
-
-const bot = new Telegraf<Context>(TELEGRAM_BOT_TOKEN);
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-const model: GenerativeModel = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
-});
-
-/* ============================
-   MEMORY STORE (Per User)
-============================ */
-
-type ChatHistory = {
-  role: 'user' | 'model';
-  parts: { text: string }[];
-};
-
-const userMemory = new Map<number, ChatHistory[]>();
-
-const MAX_HISTORY = 10;
-
-/* ============================
-   UTILS
-============================ */
-
-// Telegram message limit fix
-const splitMessage = (text: string, limit = 4096): string[] => {
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += limit) {
-    chunks.push(text.slice(i, i + limit));
-  }
-  return chunks;
-};
-
-/* ============================
-   BOT COMMANDS
-============================ */
-
-bot.start(async (ctx) => {
-  await ctx.reply(
-    '👋 Welcome!\n\nI am powered by Gemini 1.5 Flash.\nSend me a message!'
-  );
-});
-
-bot.command('reset', async (ctx) => {
-  if (ctx.from) {
-    userMemory.delete(ctx.from.id);
-  }
-  await ctx.reply('🧹 Conversation memory cleared.');
-});
-
-/* ============================
-   MAIN TEXT HANDLER
-============================ */
-
-bot.on('text', async (ctx) => {
-  if (!ctx.from) return;
-
-  const userId = ctx.from.id;
-  const userMessage = ctx.message.text.trim();
-
-  if (!userMessage) return;
-
-  try {
-    await ctx.sendChatAction('typing');
-
-    // Load or create history
-    const history = userMemory.get(userId) || [];
-
-    // Add user message
-    history.push({
-      role: 'user',
-      parts: [{ text: userMessage }],
-    });
-
-    // Trim old history
-    if (history.length > MAX_HISTORY) {
-      history.splice(0, history.length - MAX_HISTORY);
-    }
-
-    const chat = model.startChat({
-      history,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-      },
-    });
-
-    // Streaming response
-    const result = await chat.sendMessageStream(userMessage);
-
-    let fullResponse = '';
-
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      fullResponse += chunkText;
-    }
-
-    // Save model response to memory
-    history.push({
-      role: 'model',
-      parts: [{ text: fullResponse }],
-    });
-
-    userMemory.set(userId, history);
-
-    // Split if too long
-    const messages = splitMessage(fullResponse);
-
-    for (const msg of messages) {
-      await ctx.reply(msg);
-    }
-  } catch (error: unknown) {
-    console.error('AI Error:', error);
-    await ctx.reply('❌ Error processing your request. Try again.');
-  }
-});
-
-/* ============================
-   GRACEFUL SHUTDOWN
-============================ */
-
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-/* ============================
-   LAUNCH
-============================ */
-
-bot.launch()
-  .then(() => console.log('🚀 Advanced AI Bot Running...'))
-  .catch((err) => console.error('Launch Error:', err));
