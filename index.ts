@@ -1,49 +1,73 @@
 import { Telegraf } from 'telegraf';
+import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 
-const tgToken = process.env.TELEGRAM_BOT_TOKEN;
-const orKey = process.env.OPENROUTER_API_KEY;
+dotenv.config();
 
-if (!tgToken || !orKey) {
-  console.log('Error: API keys are missing in .env file');
-} else {
-  const bot = new Telegraf(tgToken);
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 
-  bot.start((ctx) => ctx.reply('Clawbot is online and ready!'));
+if (!TELEGRAM_TOKEN || !OPENROUTER_KEY) {
+  console.error('❌ Missing TELEGRAM_BOT_TOKEN or OPENROUTER_API_KEY');
+  process.exit(1);
+}
 
-  bot.on('text', async (ctx) => {
-    try {
-      await ctx.sendChatAction('typing');
-      
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
+const bot = new Telegraf(TELEGRAM_TOKEN);
+
+bot.start(async (ctx) => {
+  await ctx.reply('🤖 Clawbot is online and ready!');
+});
+
+bot.on('text', async (ctx) => {
+  try {
+    await ctx.sendChatAction('typing');
+
+    const res = await fetch(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
         headers: {
-          "Authorization": "Bearer " + orKey,
-          "Content-Type": "application/json"
+          Authorization: `Bearer ${OPENROUTER_KEY}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          "model": "google/gemini-2.0-flash-exp:free",
-          "messages": [{ "role": "user", "content": ctx.message.text }]
-        })
-      });
-
-      const data: any = await response.json();
-
-      // Validate AI Response
-      if (data && data.choices && data.choices[0] && data.choices[0].message) {
-        const replyText = data.choices[0].message.content;
-        await ctx.reply(replyText);
-      } else {
-        // Log error if API fails
-        console.error('API Error details:', JSON.stringify(data));
-        await ctx.reply('I am online, but the AI service is not responding correctly right now.');
+          model: 'mistralai/mistral-7b-instruct:free',
+          messages: [
+            {
+              role: 'user',
+              content: ctx.message.text,
+            },
+          ],
+        }),
       }
-    } catch (error) {
-      console.error('Connection Error:', error);
-      await ctx.reply('Sorry, I encountered a network error. Please try again.');
-    }
-  });
+    );
 
-  bot.launch()
-    .then(() => console.log('Clawbot is successfully running...'))
-    .catch((err) => console.error('Launch failed:', err));
-}
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('❌ OpenRouter error:', err);
+      await ctx.reply('AI service error. Please try again.');
+      return;
+    }
+
+    const data: any = await res.json();
+    const reply =
+      data?.choices?.[0]?.message?.content ??
+      'AI did not return a valid response.';
+
+    await ctx.reply(reply);
+  } catch (err) {
+    console.error('❌ Runtime error:', err);
+    await ctx.reply('Network error occurred.');
+  }
+});
+
+bot.catch((err) => {
+  console.error('❌ Telegraf error:', err);
+});
+
+bot.launch().then(() => {
+  console.log('✅ Clawbot successfully running');
+});
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
