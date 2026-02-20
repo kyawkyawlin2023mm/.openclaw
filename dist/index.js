@@ -8,7 +8,10 @@ if (!token) {
 else {
     const bot = new telegraf_1.Telegraf(token);
     bot.start((ctx) => ctx.reply('Welcome! I am your Clawbot.'));
-    bot.on('text', (ctx) => ctx.reply(You, said, $, { ctx, : .message.text }));
+    bot.on('text', (ctx) => {
+        // Note: Use backticks ``  ` for template literals
+        ctx.reply(You, said, $, { ctx, : .message.text });
+    });
     bot.launch();
     console.log('Telegram Bot is successfully running...');
 }
