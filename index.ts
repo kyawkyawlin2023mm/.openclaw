@@ -1,6 +1,5 @@
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
-import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -8,15 +7,13 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 
 if (!TELEGRAM_TOKEN || !OPENROUTER_KEY) {
-  console.error('❌ Missing TELEGRAM_BOT_TOKEN or OPENROUTER_API_KEY');
+  console.error('❌ Missing env variables');
   process.exit(1);
 }
 
 const bot = new Telegraf(TELEGRAM_TOKEN);
 
-bot.start(async (ctx) => {
-  await ctx.reply('🤖 Clawbot is online and ready!');
-});
+bot.start((ctx) => ctx.reply('🤖 Clawbot is online and ready!'));
 
 bot.on('text', async (ctx) => {
   try {
@@ -33,10 +30,7 @@ bot.on('text', async (ctx) => {
         body: JSON.stringify({
           model: 'mistralai/mistral-7b-instruct:free',
           messages: [
-            {
-              role: 'user',
-              content: ctx.message.text,
-            },
+            { role: 'user', content: ctx.message.text },
           ],
         }),
       }
@@ -45,14 +39,14 @@ bot.on('text', async (ctx) => {
     if (!res.ok) {
       const err = await res.text();
       console.error('❌ OpenRouter error:', err);
-      await ctx.reply('AI service error. Please try again.');
+      await ctx.reply('AI service error.');
       return;
     }
 
     const data: any = await res.json();
     const reply =
       data?.choices?.[0]?.message?.content ??
-      'AI did not return a valid response.';
+      'AI returned no response.';
 
     await ctx.reply(reply);
   } catch (err) {
@@ -66,7 +60,7 @@ bot.catch((err) => {
 });
 
 bot.launch().then(() => {
-  console.log('✅ Clawbot successfully running');
+  console.log('✅ Clawbot running');
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
