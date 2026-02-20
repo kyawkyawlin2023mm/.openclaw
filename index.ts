@@ -1,36 +1,155 @@
-import { Telegraf } from 'telegraf';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Telegraf, Context } from 'telegraf';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import dotenv from 'dotenv';
 
-const tgToken = process.env.TELEGRAM_BOT_TOKEN;
-const aiKey = process.env.GEMINI_API_KEY;
+dotenv.config();
 
-if (!tgToken || !aiKey) {
-  console.log('Error: Tokens are missing in .env file');
-} else {
-  const bot = new Telegraf(tgToken);
-  const genAI = new GoogleGenerativeAI(aiKey);
-  
-  // Try using 'gemini-pro' which is very stable
-  const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+/* ============================
+   ENV VALIDATION
+============================ */
 
-  bot.start((ctx) => {
-    ctx.reply('Welcome! I am your AI assistant. Ask me anything.');
-  });
+const { TELEGRAM_BOT_TOKEN, GEMINI_API_KEY } = process.env;
 
-  bot.on('text', async (ctx) => {
-    try {
-      await ctx.sendChatAction('typing');
-      const result = await model.generateContent(ctx.message.text);
-      const response = await result.response;
-      const text = response.text();
-      await ctx.reply(text);
-    } catch (error) {
-      console.error('AI Error:', error);
-      ctx.reply('I am having trouble processing your request.');
-    }
-  });
-
-  bot.launch()
-    .then(() => console.log('AI Bot is successfully running...'))
-    .catch((err) => console.error('Launch error:', err));
+if (!TELEGRAM_BOT_TOKEN) {
+  throw new Error('Missing TELEGRAM_BOT_TOKEN');
 }
+
+if (!GEMINI_API_KEY) {
+  throw new Error('Missing GEMINI_API_KEY');
+}
+
+/* ============================
+   INIT SERVICES
+============================ */
+
+const bot = new Telegraf<Context>(TELEGRAM_BOT_TOKEN);
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+const model: GenerativeModel = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash',
+});
+
+/* ============================
+   MEMORY STORE (Per User)
+============================ */
+
+type ChatHistory = {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+};
+
+const userMemory = new Map<number, ChatHistory[]>();
+
+const MAX_HISTORY = 10;
+
+/* ============================
+   UTILS
+============================ */
+
+// Telegram message limit fix
+const splitMessage = (text: string, limit = 4096): string[] => {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += limit) {
+    chunks.push(text.slice(i, i + limit));
+  }
+  return chunks;
+};
+
+/* ============================
+   BOT COMMANDS
+============================ */
+
+bot.start(async (ctx) => {
+  await ctx.reply(
+    '👋 Welcome!\n\nI am powered by Gemini 1.5 Flash.\nSend me a message!'
+  );
+});
+
+bot.command('reset', async (ctx) => {
+  if (ctx.from) {
+    userMemory.delete(ctx.from.id);
+  }
+  await ctx.reply('🧹 Conversation memory cleared.');
+});
+
+/* ============================
+   MAIN TEXT HANDLER
+============================ */
+
+bot.on('text', async (ctx) => {
+  if (!ctx.from) return;
+
+  const userId = ctx.from.id;
+  const userMessage = ctx.message.text.trim();
+
+  if (!userMessage) return;
+
+  try {
+    await ctx.sendChatAction('typing');
+
+    // Load or create history
+    const history = userMemory.get(userId) || [];
+
+    // Add user message
+    history.push({
+      role: 'user',
+      parts: [{ text: userMessage }],
+    });
+
+    // Trim old history
+    if (history.length > MAX_HISTORY) {
+      history.splice(0, history.length - MAX_HISTORY);
+    }
+
+    const chat = model.startChat({
+      history,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      },
+    });
+
+    // Streaming response
+    const result = await chat.sendMessageStream(userMessage);
+
+    let fullResponse = '';
+
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullResponse += chunkText;
+    }
+
+    // Save model response to memory
+    history.push({
+      role: 'model',
+      parts: [{ text: fullResponse }],
+    });
+
+    userMemory.set(userId, history);
+
+    // Split if too long
+    const messages = splitMessage(fullResponse);
+
+    for (const msg of messages) {
+      await ctx.reply(msg);
+    }
+  } catch (error: unknown) {
+    console.error('AI Error:', error);
+    await ctx.reply('❌ Error processing your request. Try again.');
+  }
+});
+
+/* ============================
+   GRACEFUL SHUTDOWN
+============================ */
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+/* ============================
+   LAUNCH
+============================ */
+
+bot.launch()
+  .then(() => console.log('🚀 Advanced AI Bot Running...'))
+  .catch((err) => console.error('Launch Error:', err));
