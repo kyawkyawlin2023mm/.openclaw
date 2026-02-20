@@ -11,19 +11,23 @@ else {
     const bot = new telegraf_1.Telegraf(tgToken);
     const genAI = new generative_ai_1.GoogleGenerativeAI(aiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    bot.start((ctx) => ctx.reply('Hello! I am Clawbot powered by Gemini AI. Ask me anything!'));
+    bot.start((ctx) => {
+        ctx.reply('Welcome! I am your AI assistant. Ask me anything.');
+    });
     bot.on('text', async (ctx) => {
         try {
-            // Show "typing..." status in Telegram
             await ctx.sendChatAction('typing');
             const result = await model.generateContent(ctx.message.text);
             const response = await result.response;
-            ctx.reply(response.text());
+            const text = response.text();
+            await ctx.reply(text);
         }
         catch (error) {
-            console.error(error);
-            ctx.reply('Sorry, I am having trouble thinking right now.');
+            console.error('AI Error:', error);
+            ctx.reply('I am having trouble processing your request.');
         }
     });
-    bot.launch().then(() => console.log('AI Bot is running...'));
+    bot.launch()
+        .then(() => console.log('AI Bot is successfully running...'))
+        .catch((err) => console.error('Launch error:', err));
 }
