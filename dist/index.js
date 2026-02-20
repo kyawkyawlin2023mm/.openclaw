@@ -7,10 +7,13 @@ if (!token) {
 }
 else {
     const bot = new telegraf_1.Telegraf(token);
-    bot.start((ctx) => ctx.reply('Welcome! I am your Clawbot.'));
-    bot.on('text', (ctx) => {
-        ctx.reply(`You said: ${ctx.message.text}`);
+    bot.start((ctx) => {
+        ctx.reply('Bot started successfully');
     });
-    bot.launch();
-    console.log('Telegram Bot is successfully running...');
+    bot.on('text', (ctx) => {
+        ctx.reply('Message received: ' + ctx.message.text);
+    });
+    bot.launch()
+        .then(() => console.log('Telegram Bot is running'))
+        .catch((err) => console.error(err));
 }
