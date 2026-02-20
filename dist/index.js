@@ -18,6 +18,7 @@ bot.start(async (ctx) => {
     await ctx.reply('🤖 Clawbot is online and ready!');
 });
 bot.on('text', async (ctx) => {
+    var _a, _b, _c, _d;
     try {
         await ctx.sendChatAction('typing');
         const res = await (0, node_fetch_1.default)('https://openrouter.ai/api/v1/chat/completions', {
@@ -43,8 +44,7 @@ bot.on('text', async (ctx) => {
             return;
         }
         const data = await res.json();
-        const reply = data?.choices?.[0]?.message?.content ??
-            'AI did not return a valid response.';
+        const reply = (_d = (_c = (_b = (_a = data === null || data === void 0 ? void 0 : data.choices) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.message) === null || _c === void 0 ? void 0 : _c.content) !== null && _d !== void 0 ? _d : 'AI did not return a valid response.';
         await ctx.reply(reply);
     }
     catch (err) {
