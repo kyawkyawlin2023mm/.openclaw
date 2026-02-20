@@ -13,7 +13,7 @@ if (!TELEGRAM_TOKEN || !OPENROUTER_KEY) {
 
 const bot = new Telegraf(TELEGRAM_TOKEN);
 
-bot.start((ctx) => ctx.reply('🤖 Clawbot is online and ready!'));
+bot.start((ctx) => ctx.reply('🤖 Clawbot is online (GPT-4o mini)'));
 
 bot.on('text', async (ctx) => {
   try {
@@ -28,9 +28,16 @@ bot.on('text', async (ctx) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-exp:free',
+          model: 'openai/gpt-4o-mini',
           messages: [
-            { role: 'user', content: ctx.message.text },
+            {
+              role: 'system',
+              content: 'You are Clawbot, a helpful AI assistant.',
+            },
+            {
+              role: 'user',
+              content: ctx.message.text,
+            },
           ],
         }),
       }
@@ -39,14 +46,14 @@ bot.on('text', async (ctx) => {
     if (!res.ok) {
       const err = await res.text();
       console.error('❌ OpenRouter error:', err);
-      await ctx.reply('AI service error.');
+      await ctx.reply('AI service error. Try again later.');
       return;
     }
 
     const data: any = await res.json();
     const reply =
       data?.choices?.[0]?.message?.content ??
-      'AI returned no response.';
+      'No response from AI.';
 
     await ctx.reply(reply);
   } catch (err) {
@@ -60,13 +67,8 @@ bot.catch((err) => {
 });
 
 bot.launch().then(() => {
-  console.log('✅ Clawbot running');
+  console.log('✅ Clawbot running with GPT-4o mini');
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-const MODELS = [
-  'google/gemini-2.0-flash-exp:free',
-  'meta-llama/llama-3.1-8b-instruct:free'
-];
