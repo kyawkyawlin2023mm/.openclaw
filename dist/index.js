@@ -4,11 +4,11 @@ const telegraf_1 = require("telegraf");
 const tgToken = process.env.TELEGRAM_BOT_TOKEN;
 const orKey = process.env.OPENROUTER_API_KEY;
 if (!tgToken || !orKey) {
-    console.log('Error: Tokens are missing');
+    console.log('Error: API keys are missing in .env file');
 }
 else {
     const bot = new telegraf_1.Telegraf(tgToken);
-    bot.start((ctx) => ctx.reply('Clawbot is ready! (OpenRouter version)'));
+    bot.start((ctx) => ctx.reply('Clawbot is online and ready!'));
     bot.on('text', async (ctx) => {
         try {
             await ctx.sendChatAction('typing');
@@ -24,13 +24,23 @@ else {
                 })
             });
             const data = await response.json();
-            const replyText = data.choices[0].message.content;
-            await ctx.reply(replyText);
+            // Validate AI Response
+            if (data && data.choices && data.choices[0] && data.choices[0].message) {
+                const replyText = data.choices[0].message.content;
+                await ctx.reply(replyText);
+            }
+            else {
+                // Log error if API fails
+                console.error('API Error details:', JSON.stringify(data));
+                await ctx.reply('I am online, but the AI service is not responding correctly right now.');
+            }
         }
         catch (error) {
-            console.error('AI Error:', error);
-            ctx.reply('I am having trouble with the AI service.');
+            console.error('Connection Error:', error);
+            await ctx.reply('Sorry, I encountered a network error. Please try again.');
         }
     });
-    bot.launch().then(() => console.log('Bot is running...'));
+    bot.launch()
+        .then(() => console.log('Clawbot is successfully running...'))
+        .catch((err) => console.error('Launch failed:', err));
 }
