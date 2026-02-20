@@ -65,3 +65,8 @@ bot.launch().then(() => {
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+const MODELS = [
+  'google/gemini-2.0-flash-exp:free',
+  'meta-llama/llama-3.1-8b-instruct:free'
+];
