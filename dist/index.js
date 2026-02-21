@@ -28,31 +28,36 @@ bot.on('text', async (ctx) => {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are Clawbot, a helpful AI assistant.',
+                        "content": "You are Clawbot. Respond fluently in Myanmar (Burmese) language with a polite and helpful tone."
                     },
-                    {
-                        role: 'user',
-                        content: ctx.message.text,
-                    },
-                ],
-            }),
+                    { "role": "user", "content": ctx.message.text }
+                ]
+            })
+        }, {
+            role: 'user',
+            content: ctx.message.text,
         });
-        if (!res.ok) {
-            const err = await res.text();
-            console.error('❌ OpenRouter error:', err);
-            await ctx.reply('AI service error. Try again later.');
-            return;
-        }
-        const data = await res.json();
-        const reply = data?.choices?.[0]?.message?.content ??
-            'No response from AI.';
-        await ctx.reply(reply);
     }
-    catch (err) {
-        console.error('❌ Runtime error:', err);
-        await ctx.reply('Network error occurred.');
-    }
-});
+    finally { }
+}),
+;
+;
+if (!res.ok) {
+    const err = await res.text();
+    console.error('❌ OpenRouter error:', err);
+    await ctx.reply('AI service error. Try again later.');
+    return;
+}
+const data = await res.json();
+const reply = data?.choices?.[0]?.message?.content ??
+    'No response from AI.';
+await ctx.reply(reply);
+try { }
+catch (err) {
+    console.error('❌ Runtime error:', err);
+    await ctx.reply('Network error occurred.');
+}
+;
 bot.catch((err) => {
     console.error('❌ Telegraf error:', err);
 });
