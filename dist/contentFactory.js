@@ -15,6 +15,10 @@ async function callOpenRouter(messages) {
             messages,
         }),
     });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error("OpenRouter error: " + err);
+    }
     const data = await res.json();
     return data?.choices?.[0]?.message?.content ?? "";
 }
@@ -57,8 +61,9 @@ async function plannerAgent(topic) {
 }
 // 🎯 Hook Agent
 const HOOK_PROMPT = `
-You are a TikTok Hook Agent.
+You are a TikTok Hook Writer.
 Create a short, punchy, scroll-stopping opening line (1-2 lines).
+Do not include any labels, markdown, or explanations.
 ${LANGUAGE_RULE}
 `;
 // ✍️ Script Agent
@@ -66,31 +71,49 @@ const SCRIPT_PROMPT = `
 You are a TikTok Script Writer.
 Write a 30-60 second TikTok script about the topic.
 Make it engaging and easy to speak.
+Do not include any labels, markdown, or explanations.
 ${LANGUAGE_RULE}
 `;
 // 📣 CTA Agent
 const CTA_PROMPT = `
-You are a CTA Agent.
+You are a CTA Writer.
 Write 2-3 short call-to-action lines (e.g., Follow, Comment, Like, Share).
+Do not include any labels, markdown, or explanations.
 ${LANGUAGE_RULE}
 `;
 // #️⃣ Hashtag Agent
 const HASHTAG_PROMPT = `
-You are a Hashtag Agent.
+You are a Hashtag Generator.
 Generate 8-12 relevant hashtags for TikTok.
 Use trending and niche tags.
-Keep hashtags mostly in English (platform standard), but you may include Burmese tags if relevant.
+Output only hashtags separated by spaces.
 `;
-// 🎨 UX Agent
+// 🎨 UX Formatter
 const UX_PROMPT = `
-You are a UX Agent.
-Format everything nicely with clear sections and emojis.
+You are a UX Formatter.
+Rules:
+- Remove any agent names, role labels, markdown (###, **, quotes), or extra noise.
+- Do NOT mention AI, agents, or assistants.
+- Keep only the final content.
+- Structure it with these exact sections:
+
+Hook:
+Script:
+CTA:
+Hashtags:
+
+- Make it clean and readable for Telegram.
 ${LANGUAGE_RULE}
 `;
-// ⚡ Efficiency Agent
+// ⚡ Final Editor
 const EFFICIENCY_PROMPT = `
-You are an Efficiency Agent.
-Make the content concise, punchy, and remove fluff.
+You are a Final Editor.
+Rules:
+- Clean up the text.
+- Remove repetition and weird formatting.
+- Keep it short, punchy, and natural.
+- Do NOT add any explanations or labels about AI or agents.
+- Output ONLY the final content ready to post.
 ${LANGUAGE_RULE}
 `;
 // Agent functions
@@ -138,7 +161,7 @@ async function handleContentCommand(text) {
     const topic = parts.join(" ") || "general topic";
     // 0) Get plan
     const plan = await plannerAgent(`${platform} ${topic}`);
-    // Only TikTok for now (Phase 1.2 scope)
+    // Phase 1.2 scope: TikTok only
     if (plan.platform && String(plan.platform).toLowerCase() !== "tiktok") {
         return "Currently, only TikTok is supported. Use: /content tiktok your topic";
     }
@@ -161,23 +184,23 @@ async function handleContentCommand(text) {
             hashtags = await hashtagAgent(topic);
         }
     }
-    // 2) Combine
+    // 2) Combine (clean base)
     let combined = `
-🎯 Hook:
+Hook:
 ${hook}
 
-📝 Script:
+Script:
 ${script}
 
-📣 CTA:
+CTA:
 ${cta}
 
-#️⃣ Hashtags:
+Hashtags:
 ${hashtags}
 `;
     // 3) UX format
     combined = await uxAgent(combined);
-    // 4) Efficiency optimize
+    // 4) Final clean
     combined = await efficiencyAgent(combined);
     return combined;
 }
