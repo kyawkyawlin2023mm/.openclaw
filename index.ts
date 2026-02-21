@@ -1,6 +1,7 @@
 import { Telegraf } from "telegraf";
 import dotenv from "dotenv";
 import { handleMission } from "./missionControl";
+import { handleContentCommand } from "./contentFactory";
 
 dotenv.config();
 
@@ -20,8 +21,17 @@ bot.on("text", async (ctx) => {
   try {
     await ctx.sendChatAction("typing");
 
-    const userMessage = ctx.message.text;
-    const reply = await handleMission(userMessage);
+    const text = ctx.message.text.trim();
+
+    let reply: string;
+
+    if (text.startsWith("/content")) {
+      // /content tiktok BMW motorcycle
+      reply = await handleContentCommand(text);
+    } else {
+      // default = normal assistant
+      reply = await handleMission(text);
+    }
 
     await ctx.reply(reply);
   } catch (err) {
@@ -29,7 +39,6 @@ bot.on("text", async (ctx) => {
     await ctx.reply("Network or AI error occurred.");
   }
 });
-
 bot.catch((err) => {
   console.error("❌ Telegraf error:", err);
 });

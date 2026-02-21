@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const telegraf_1 = require("telegraf");
 const dotenv_1 = __importDefault(require("dotenv"));
 const missionControl_1 = require("./missionControl");
+const contentFactory_1 = require("./contentFactory");
 dotenv_1.default.config();
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -18,8 +19,16 @@ bot.start((ctx) => ctx.reply("🤖 Clawbot is online (Multi-Agent Mode)"));
 bot.on("text", async (ctx) => {
     try {
         await ctx.sendChatAction("typing");
-        const userMessage = ctx.message.text;
-        const reply = await (0, missionControl_1.handleMission)(userMessage);
+        const text = ctx.message.text.trim();
+        let reply;
+        if (text.startsWith("/content")) {
+            // /content tiktok BMW motorcycle
+            reply = await (0, contentFactory_1.handleContentCommand)(text);
+        }
+        else {
+            // default = normal assistant
+            reply = await (0, missionControl_1.handleMission)(text);
+        }
         await ctx.reply(reply);
     }
     catch (err) {
