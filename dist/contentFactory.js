@@ -18,37 +18,49 @@ async function callOpenRouter(messages) {
     const data = await res.json();
     return data?.choices?.[0]?.message?.content ?? "";
 }
+// 🌐 Language rule (shared)
+const LANGUAGE_RULE = `
+If the user writes in Burmese (Myanmar), respond in Burmese.
+If the user writes in English, respond in English.
+Always match the user's language.
+`;
 // 🎯 Hook Agent
 const HOOK_PROMPT = `
 You are a TikTok Hook Agent.
 Create a short, punchy, scroll-stopping opening line (1-2 lines).
+${LANGUAGE_RULE}
 `;
 // ✍️ Script Agent
 const SCRIPT_PROMPT = `
 You are a TikTok Script Writer.
 Write a 30-60 second TikTok script about the topic.
 Make it engaging and easy to speak.
+${LANGUAGE_RULE}
 `;
 // 📣 CTA Agent
 const CTA_PROMPT = `
 You are a CTA Agent.
 Write 2-3 short call-to-action lines (e.g., Follow, Comment, Like, Share).
+${LANGUAGE_RULE}
 `;
 // #️⃣ Hashtag Agent
 const HASHTAG_PROMPT = `
 You are a Hashtag Agent.
 Generate 8-12 relevant hashtags for TikTok.
 Use trending and niche tags.
+Keep hashtags mostly in English (platform standard), but you may include Burmese tags if relevant.
 `;
 // 🎨 UX Agent
 const UX_PROMPT = `
 You are a UX Agent.
 Format everything nicely with clear sections and emojis.
+${LANGUAGE_RULE}
 `;
 // ⚡ Efficiency Agent
 const EFFICIENCY_PROMPT = `
 You are an Efficiency Agent.
 Make the content concise, punchy, and remove fluff.
+${LANGUAGE_RULE}
 `;
 // Agents
 async function hookAgent(topic) {
@@ -89,7 +101,7 @@ async function efficiencyAgent(content) {
 }
 // 🎬 Main handler for /content
 async function handleContentCommand(text) {
-    // Example: /content tiktok BMW motorcycle
+    // Example: /content tiktok BMW ဆိုင်ကယ်
     const parts = text.split(" ").slice(1); // remove /content
     const platform = parts.shift() || "tiktok";
     const topic = parts.join(" ") || "general topic";
