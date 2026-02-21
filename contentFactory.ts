@@ -27,6 +27,39 @@ If the user writes in English, respond in English.
 Always match the user's language.
 `;
 
+// 🧠 Planner Agent (JSON)
+const PLANNER_PROMPT = `
+You are a Content Planner Agent.
+Analyze the user's request and return a JSON plan.
+The plan must include:
+- platform (tiktok, youtube, facebook)
+- audience (e.g., beginners, bikers, youth, general)
+- tone (e.g., energetic, professional, friendly)
+- steps (array of steps like: hook, script, cta, hashtags)
+
+Return ONLY valid JSON. No explanation.
+${LANGUAGE_RULE}
+`;
+
+async function plannerAgent(topic: string) {
+  const reply = await callOpenRouter([
+    { role: "system", content: PLANNER_PROMPT },
+    { role: "user", content: topic },
+  ]);
+
+  try {
+    return JSON.parse(reply);
+  } catch {
+    // fallback plan
+    return {
+      platform: "tiktok",
+      audience: "general",
+      tone: "energetic",
+      steps: ["hook", "script", "cta", "hashtags"],
+    };
+  }
+}
+
 // 🎯 Hook Agent
 const HOOK_PROMPT = `
 You are a TikTok Hook Agent.
@@ -71,7 +104,7 @@ Make the content concise, punchy, and remove fluff.
 ${LANGUAGE_RULE}
 `;
 
-// Agents
+// Agent functions
 async function hookAgent(topic: string) {
   return callOpenRouter([
     { role: "system", content: HOOK_PROMPT },
@@ -114,30 +147,40 @@ async function efficiencyAgent(content: string) {
   ]);
 }
 
-// 🎬 Main handler for /content
+// 🎬 Main handler for /content (Plan-based orchestration)
 export async function handleContentCommand(text: string) {
   // Example: /content tiktok BMW ဆိုင်ကယ်
   const parts = text.split(" ").slice(1); // remove /content
-  const platform = parts.shift() || "tiktok";
+  const platform = (parts.shift() || "tiktok").toLowerCase();
   const topic = parts.join(" ") || "general topic";
 
-  if (platform.toLowerCase() !== "tiktok") {
+  // 0) Get plan
+  const plan = await plannerAgent(`${platform} ${topic}`);
+
+  // Only TikTok for now (Phase 1.2 scope)
+  if (plan.platform && String(plan.platform).toLowerCase() !== "tiktok") {
     return "Currently, only TikTok is supported. Use: /content tiktok your topic";
   }
 
-  // 1) Hook
-  const hook = await hookAgent(topic);
+  let hook = "";
+  let script = "";
+  let cta = "";
+  let hashtags = "";
 
-  // 2) Script
-  const script = await scriptAgent(topic);
+  // 1) Execute steps based on plan
+  for (const step of plan.steps || []) {
+    if (step === "hook") {
+      hook = await hookAgent(topic);
+    } else if (step === "script") {
+      script = await scriptAgent(topic);
+    } else if (step === "cta") {
+      cta = await ctaAgent(topic);
+    } else if (step === "hashtags") {
+      hashtags = await hashtagAgent(topic);
+    }
+  }
 
-  // 3) CTA
-  const cta = await ctaAgent(topic);
-
-  // 4) Hashtags
-  const hashtags = await hashtagAgent(topic);
-
-  // 5) Combine
+  // 2) Combine
   let combined = `
 🎯 Hook:
 ${hook}
@@ -152,10 +195,10 @@ ${cta}
 ${hashtags}
 `;
 
-  // 6) UX format
+  // 3) UX format
   combined = await uxAgent(combined);
 
-  // 7) Efficiency optimize
+  // 4) Efficiency optimize
   combined = await efficiencyAgent(combined);
 
   return combined;
