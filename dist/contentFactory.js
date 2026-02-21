@@ -18,48 +18,61 @@ async function callOpenRouter(messages) {
     const data = await res.json();
     return data?.choices?.[0]?.message?.content ?? "";
 }
-// 🧠 Planner Agent
-const PLANNER_PROMPT = `
-You are a Content Planner Agent.
-Given a platform and topic, create a short plan for the content.
-Return a short bullet plan.
+// 🎯 Hook Agent
+const HOOK_PROMPT = `
+You are a TikTok Hook Agent.
+Create a short, punchy, scroll-stopping opening line (1-2 lines).
 `;
 // ✍️ Script Agent
 const SCRIPT_PROMPT = `
-You are a Script Writer Agent.
-Write the main content/script based on the plan and topic.
+You are a TikTok Script Writer.
+Write a 30-60 second TikTok script about the topic.
+Make it engaging and easy to speak.
 `;
-// 🎯 Hook Agent
-const HOOK_PROMPT = `
-You are a Hook Agent.
-Create a catchy opening hook for the content.
+// 📣 CTA Agent
+const CTA_PROMPT = `
+You are a CTA Agent.
+Write 2-3 short call-to-action lines (e.g., Follow, Comment, Like, Share).
+`;
+// #️⃣ Hashtag Agent
+const HASHTAG_PROMPT = `
+You are a Hashtag Agent.
+Generate 8-12 relevant hashtags for TikTok.
+Use trending and niche tags.
 `;
 // 🎨 UX Agent
 const UX_PROMPT = `
 You are a UX Agent.
-Format the content nicely for posting (sections, emojis if suitable, readability).
+Format everything nicely with clear sections and emojis.
 `;
 // ⚡ Efficiency Agent
 const EFFICIENCY_PROMPT = `
 You are an Efficiency Agent.
-Make the content concise, remove fluff, keep it powerful.
+Make the content concise, punchy, and remove fluff.
 `;
-async function plannerAgent(platform, topic) {
-    return callOpenRouter([
-        { role: "system", content: PLANNER_PROMPT },
-        { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
-    ]);
-}
-async function scriptAgent(plan, platform, topic) {
-    return callOpenRouter([
-        { role: "system", content: SCRIPT_PROMPT },
-        { role: "user", content: `Platform: ${platform}\nTopic: ${topic}\nPlan:\n${plan}` },
-    ]);
-}
-async function hookAgent(script) {
+// Agents
+async function hookAgent(topic) {
     return callOpenRouter([
         { role: "system", content: HOOK_PROMPT },
-        { role: "user", content: script },
+        { role: "user", content: topic },
+    ]);
+}
+async function scriptAgent(topic) {
+    return callOpenRouter([
+        { role: "system", content: SCRIPT_PROMPT },
+        { role: "user", content: topic },
+    ]);
+}
+async function ctaAgent(topic) {
+    return callOpenRouter([
+        { role: "system", content: CTA_PROMPT },
+        { role: "user", content: topic },
+    ]);
+}
+async function hashtagAgent(topic) {
+    return callOpenRouter([
+        { role: "system", content: HASHTAG_PROMPT },
+        { role: "user", content: topic },
     ]);
 }
 async function uxAgent(content) {
@@ -78,19 +91,36 @@ async function efficiencyAgent(content) {
 async function handleContentCommand(text) {
     // Example: /content tiktok BMW motorcycle
     const parts = text.split(" ").slice(1); // remove /content
-    const platform = parts.shift() || "general";
+    const platform = parts.shift() || "tiktok";
     const topic = parts.join(" ") || "general topic";
-    // 1) Plan
-    const plan = await plannerAgent(platform, topic);
+    if (platform.toLowerCase() !== "tiktok") {
+        return "Currently, only TikTok is supported. Use: /content tiktok your topic";
+    }
+    // 1) Hook
+    const hook = await hookAgent(topic);
     // 2) Script
-    const script = await scriptAgent(plan, platform, topic);
-    // 3) Hook
-    const hook = await hookAgent(script);
-    // 4) Combine
-    let combined = `🔥 Hook:\n${hook}\n\n📝 Content:\n${script}`;
-    // 5) UX format
+    const script = await scriptAgent(topic);
+    // 3) CTA
+    const cta = await ctaAgent(topic);
+    // 4) Hashtags
+    const hashtags = await hashtagAgent(topic);
+    // 5) Combine
+    let combined = `
+🎯 Hook:
+${hook}
+
+📝 Script:
+${script}
+
+📣 CTA:
+${cta}
+
+#️⃣ Hashtags:
+${hashtags}
+`;
+    // 6) UX format
     combined = await uxAgent(combined);
-    // 6) Efficiency optimize
+    // 7) Efficiency optimize
     combined = await efficiencyAgent(combined);
     return combined;
 }
