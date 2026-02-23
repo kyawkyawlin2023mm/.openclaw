@@ -11,8 +11,10 @@ async function callOpenRouter(messages) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            model: "openai/gpt-4o-mini",
+            model: "openai/gpt-4o",
             messages,
+            temperature: 0.7,
+            max_tokens: 1200,
         }),
     });
     if (!res.ok) {

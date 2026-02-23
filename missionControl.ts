@@ -16,8 +16,10 @@ async function callOpenRouter(messages: ChatMessage[]) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
+      model: "openai/gpt-4o",
       messages,
+      temperature: 0.7,
+      max_tokens: 1200,
     }),
   });
 
@@ -29,7 +31,6 @@ async function callOpenRouter(messages: ChatMessage[]) {
   const data: any = await res.json();
   return data?.choices?.[0]?.message?.content ?? "";
 }
-
 // ✍️ Content Agent
 const CONTENT_PROMPT = `
 You are the Content Agent.
