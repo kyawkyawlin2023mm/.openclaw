@@ -1,5 +1,5 @@
 "use strict";
-// contentFactory.ts (Phase 1.3 Platform Pro)
+// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Multi-Variations)
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleContentCommand = handleContentCommand;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -11,7 +11,7 @@ async function callOpenRouter(messages) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            model: "openai/gpt-4.1",
+            model: "openai/gpt-4.1", // switched to GPT-4.1
             messages,
             temperature: 0.7,
             max_tokens: 1200,
@@ -188,11 +188,22 @@ async function finalEditor(content) {
 }
 // ===== Main handler =====
 async function handleContentCommand(text) {
-    // Examples:
+    // Supports:
     // /content tiktok BMW ဆိုင်ကယ် လူငယ်တွေ အတွက်
     // /content youtube BMW maintenance for beginners
     // /content fb motivation about success
-    const parts = text.split(" ").slice(1); // remove /content
+    // Variants:
+    // /content tiktok BMW ဆိုင်ကယ် --variants 3
+    // parse variants flag: --variants N
+    const raw = text;
+    let variants = 1;
+    const vMatch = raw.match(/--variants\s+(\d+)/i);
+    if (vMatch) {
+        variants = Math.max(1, Math.min(5, parseInt(vMatch[1], 10) || 1)); // cap at 5
+    }
+    // remove flags before normal parsing
+    const cleaned = raw.replace(/--variants\s+\d+/i, "").trim();
+    const parts = cleaned.split(" ").slice(1); // remove /content
     const platformInput = (parts.shift() || "tiktok").toLowerCase();
     const topic = parts.join(" ") || "general topic";
     // Get plan (planner can refine audience/tone/steps)
@@ -205,25 +216,29 @@ async function handleContentCommand(text) {
         return "Use: /content tiktok|youtube|fb your topic";
     }
     const normPlatform = platform === "fb" ? "facebook" : platform;
-    let hook = "";
-    let script = "";
-    let cta = "";
-    let hashtags = "";
-    for (const step of steps) {
-        if (step === "hook") {
-            hook = await hookAgent(normPlatform, topic, tone, audience);
+    let outputs = [];
+    for (let i = 1; i <= variants; i++) {
+        let hook = "";
+        let script = "";
+        let cta = "";
+        let hashtags = "";
+        for (const step of steps) {
+            if (step === "hook") {
+                hook = await hookAgent(normPlatform, topic, tone, audience);
+            }
+            else if (step === "script") {
+                script = await scriptAgent(normPlatform, topic, tone, audience);
+            }
+            else if (step === "cta") {
+                cta = await ctaAgent(topic);
+            }
+            else if (step === "hashtags") {
+                hashtags = await hashtagAgent(topic, normPlatform);
+            }
         }
-        else if (step === "script") {
-            script = await scriptAgent(normPlatform, topic, tone, audience);
-        }
-        else if (step === "cta") {
-            cta = await ctaAgent(topic);
-        }
-        else if (step === "hashtags") {
-            hashtags = await hashtagAgent(topic, normPlatform);
-        }
-    }
-    let combined = `
+        let combined = `
+Version ${i}
+
 Hook:
 ${hook}
 
@@ -236,7 +251,9 @@ ${cta}
 Hashtags:
 ${hashtags}
 `;
-    combined = await uxAgent(combined);
-    combined = await finalEditor(combined);
-    return combined;
+        combined = await uxAgent(combined);
+        combined = await finalEditor(combined);
+        outputs.push(combined);
+    }
+    return outputs.join("\n\n--------------------\n\n");
 }
