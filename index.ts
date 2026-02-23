@@ -2,6 +2,7 @@ import { Telegraf } from "telegraf";
 import dotenv from "dotenv";
 import { handleMission } from "./missionControl";
 import { handleContentCommand } from "./contentFactory";
+import { handleCalendarCommand } from "./calendarFactory";
 
 dotenv.config();
 
@@ -25,13 +26,13 @@ bot.on("text", async (ctx) => {
 
     let reply: string;
 
-    if (text.startsWith("/content")) {
-      // /content tiktok BMW motorcycle
-      reply = await handleContentCommand(text);
-    } else {
-      // default = normal assistant
-      reply = await handleMission(text);
-    }
+  if (text.startsWith("/content")) {
+  reply = await handleContentCommand(text);
+} else if (text.startsWith("/calendar")) {
+  reply = await handleCalendarCommand(text);
+} else {
+  reply = await handleMission(text);
+}
 
     await ctx.reply(reply);
   } catch (err) {

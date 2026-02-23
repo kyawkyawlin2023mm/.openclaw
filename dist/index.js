@@ -7,6 +7,7 @@ const telegraf_1 = require("telegraf");
 const dotenv_1 = __importDefault(require("dotenv"));
 const missionControl_1 = require("./missionControl");
 const contentFactory_1 = require("./contentFactory");
+const calendarFactory_1 = require("./calendarFactory");
 dotenv_1.default.config();
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -22,11 +23,12 @@ bot.on("text", async (ctx) => {
         const text = ctx.message.text.trim();
         let reply;
         if (text.startsWith("/content")) {
-            // /content tiktok BMW motorcycle
             reply = await (0, contentFactory_1.handleContentCommand)(text);
         }
+        else if (text.startsWith("/calendar")) {
+            reply = await (0, calendarFactory_1.handleCalendarCommand)(text);
+        }
         else {
-            // default = normal assistant
             reply = await (0, missionControl_1.handleMission)(text);
         }
         await ctx.reply(reply);
