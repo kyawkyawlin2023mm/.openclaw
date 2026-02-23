@@ -11,7 +11,7 @@ async function callOpenRouter(messages) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            model: "openai/gpt-4o", // switched to GPT-4o
+            model: "openai/gpt-4.1", // switched to GPT-4.1
             messages,
             temperature: 0.7,
             max_tokens: 1200,
