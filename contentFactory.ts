@@ -1,4 +1,4 @@
-// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Variants + Phase 1.4(C) Hashtag Strategy Pro)
+// contentFactory.ts (Platform Pro + Variants + Hashtag Strategy Pro + Critic/Scorer)
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -115,7 +115,7 @@ No labels or markdown.
 ${LANGUAGE_RULE}
 `;
 
-// CTA (shared)
+// CTA
 const CTA_PROMPT = `
 You are a CTA Writer.
 Write 2-3 short call-to-action lines (Follow, Comment, Like, Share).
@@ -141,6 +141,23 @@ Niche: #tag #tag #tag
 Branded: #tag #tag #tag
 
 - No explanations, no markdown, no extra text.
+${LANGUAGE_RULE}
+`;
+
+// 🧪 Critic / Scorer
+const CRITIC_PROMPT = `
+You are a Content Critic.
+Given multiple versions, score each from 1 to 10 based on:
+- Hook strength
+- Clarity
+- Engagement potential
+- Platform fit
+
+Rules:
+- Output a ranked list from best to worst.
+- For each version, include: "Version X: Score Y/10 - short reason"
+- Then recommend ONE best version.
+- Keep it concise.
 ${LANGUAGE_RULE}
 `;
 
@@ -222,32 +239,37 @@ async function finalEditor(content: string) {
   ]);
 }
 
+async function criticAgent(variantsText: string) {
+  return callOpenRouter([
+    { role: "system", content: CRITIC_PROMPT },
+    { role: "user", content: variantsText },
+  ]);
+}
+
 // ===== Main handler =====
 export async function handleContentCommand(text: string) {
-  // Supports:
-  // /content tiktok BMW ဆိုင်ကယ် လူငယ်တွေ အတွက်
-  // /content youtube BMW maintenance for beginners
-  // /content fb motivation about success
-  // Variants:
-  // /content tiktok BMW ဆိုင်ကယ် --variants 3
-
-  // parse variants flag: --variants N
+  // /content tiktok BMW ... [--variants N] [--score]
   const raw = text;
-  let variants = 1;
 
+  // flags
+  let variants = 1;
   const vMatch = raw.match(/--variants\s+(\d+)/i);
   if (vMatch) {
-    variants = Math.max(1, Math.min(5, parseInt(vMatch[1], 10) || 1)); // cap at 5
+    variants = Math.max(1, Math.min(5, parseInt(vMatch[1], 10) || 1));
   }
+  const wantsScore = /--score/i.test(raw);
 
-  // remove flags before normal parsing
-  const cleaned = raw.replace(/--variants\s+\d+/i, "").trim();
+  // clean flags
+  const cleaned = raw
+    .replace(/--variants\s+\d+/i, "")
+    .replace(/--score/i, "")
+    .trim();
 
   const parts = cleaned.split(" ").slice(1); // remove /content
   const platformInput = (parts.shift() || "tiktok").toLowerCase();
   const topic = parts.join(" ") || "general topic";
 
-  // Get plan (planner can refine audience/tone/steps)
+  // plan
   const plan = await plannerAgent(`${platformInput} ${topic}`);
 
   const platform = (plan.platform || platformInput || "tiktok").toLowerCase();
@@ -270,15 +292,10 @@ export async function handleContentCommand(text: string) {
     let hashtags = "";
 
     for (const step of steps) {
-      if (step === "hook") {
-        hook = await hookAgent(normPlatform, topic, tone, audience);
-      } else if (step === "script") {
-        script = await scriptAgent(normPlatform, topic, tone, audience);
-      } else if (step === "cta") {
-        cta = await ctaAgent(topic);
-      } else if (step === "hashtags") {
-        hashtags = await hashtagStrategyAgent(topic, normPlatform);
-      }
+      if (step === "hook") hook = await hookAgent(normPlatform, topic, tone, audience);
+      else if (step === "script") script = await scriptAgent(normPlatform, topic, tone, audience);
+      else if (step === "cta") cta = await ctaAgent(topic);
+      else if (step === "hashtags") hashtags = await hashtagStrategyAgent(topic, normPlatform);
     }
 
     let combined = `
@@ -303,5 +320,12 @@ ${hashtags}
     outputs.push(combined);
   }
 
-  return outputs.join("\n\n--------------------\n\n");
+  const joined = outputs.join("\n\n--------------------\n\n");
+
+  if (variants > 1 && wantsScore) {
+    const scores = await criticAgent(joined);
+    return joined + "\n\n====================\n\n" + scores;
+  }
+
+  return joined;
 }
