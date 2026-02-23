@@ -1,5 +1,5 @@
 "use strict";
-// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Multi-Variations)
+// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Variants + Phase 1.4(C) Hashtag Strategy Pro)
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleContentCommand = handleContentCommand;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -11,10 +11,10 @@ async function callOpenRouter(messages) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            model: "openai/gpt-4.1", // switched to GPT-4.1
+            model: "openai/gpt-4.1",
             messages,
             temperature: 0.7,
-            max_tokens: 1200,
+            max_tokens: 800, // keep under credit limit
         }),
     });
     if (!res.ok) {
@@ -102,18 +102,32 @@ Write a short story-style post with a discussion question at the end.
 No labels or markdown.
 ${LANGUAGE_RULE}
 `;
-// CTA / Hashtags (shared)
+// CTA (shared)
 const CTA_PROMPT = `
 You are a CTA Writer.
 Write 2-3 short call-to-action lines (Follow, Comment, Like, Share).
 No labels or markdown.
 ${LANGUAGE_RULE}
 `;
-const HASHTAG_PROMPT = `
-You are a Hashtag Generator.
-Generate 8-12 relevant hashtags.
-Use trending + niche tags.
-Output only hashtags separated by spaces.
+// 🏷️ Hashtag Strategy Pro
+const HASHTAG_STRATEGY_PROMPT = `
+You are a Hashtag Strategist.
+Generate hashtags in THREE groups:
+
+- Reach: broad, high-traffic hashtags
+- Niche: topic-specific, targeted hashtags
+- Branded: channel/brand/style hashtags (invent if needed)
+
+Rules:
+- Each group should have 4-6 hashtags
+- Output exactly in this format:
+
+Reach: #tag #tag #tag
+Niche: #tag #tag #tag
+Branded: #tag #tag #tag
+
+- No explanations, no markdown, no extra text.
+${LANGUAGE_RULE}
 `;
 // UX & Final
 const UX_PROMPT = `
@@ -168,9 +182,9 @@ async function ctaAgent(topic) {
         { role: "user", content: topic },
     ]);
 }
-async function hashtagAgent(topic, platform) {
+async function hashtagStrategyAgent(topic, platform) {
     return callOpenRouter([
-        { role: "system", content: HASHTAG_PROMPT },
+        { role: "system", content: HASHTAG_STRATEGY_PROMPT },
         { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
     ]);
 }
@@ -233,7 +247,7 @@ async function handleContentCommand(text) {
                 cta = await ctaAgent(topic);
             }
             else if (step === "hashtags") {
-                hashtags = await hashtagAgent(topic, normPlatform);
+                hashtags = await hashtagStrategyAgent(topic, normPlatform);
             }
         }
         let combined = `

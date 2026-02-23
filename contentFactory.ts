@@ -1,4 +1,4 @@
-// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Multi-Variations)
+// contentFactory.ts (Phase 1.3 Platform Pro + Phase 1.4(B) Variants + Phase 1.4(C) Hashtag Strategy Pro)
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -11,10 +11,10 @@ async function callOpenRouter(messages: ChatMessage[]) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-     model: "openai/gpt-4.1", // switched to GPT-4.1
+      model: "openai/gpt-4.1",
       messages,
       temperature: 0.7,
-      max_tokens: 1200,
+      max_tokens: 800, // keep under credit limit
     }),
   });
 
@@ -115,7 +115,7 @@ No labels or markdown.
 ${LANGUAGE_RULE}
 `;
 
-// CTA / Hashtags (shared)
+// CTA (shared)
 const CTA_PROMPT = `
 You are a CTA Writer.
 Write 2-3 short call-to-action lines (Follow, Comment, Like, Share).
@@ -123,11 +123,25 @@ No labels or markdown.
 ${LANGUAGE_RULE}
 `;
 
-const HASHTAG_PROMPT = `
-You are a Hashtag Generator.
-Generate 8-12 relevant hashtags.
-Use trending + niche tags.
-Output only hashtags separated by spaces.
+// 🏷️ Hashtag Strategy Pro
+const HASHTAG_STRATEGY_PROMPT = `
+You are a Hashtag Strategist.
+Generate hashtags in THREE groups:
+
+- Reach: broad, high-traffic hashtags
+- Niche: topic-specific, targeted hashtags
+- Branded: channel/brand/style hashtags (invent if needed)
+
+Rules:
+- Each group should have 4-6 hashtags
+- Output exactly in this format:
+
+Reach: #tag #tag #tag
+Niche: #tag #tag #tag
+Branded: #tag #tag #tag
+
+- No explanations, no markdown, no extra text.
+${LANGUAGE_RULE}
 `;
 
 // UX & Final
@@ -187,9 +201,9 @@ async function ctaAgent(topic: string) {
   ]);
 }
 
-async function hashtagAgent(topic: string, platform: string) {
+async function hashtagStrategyAgent(topic: string, platform: string) {
   return callOpenRouter([
-    { role: "system", content: HASHTAG_PROMPT },
+    { role: "system", content: HASHTAG_STRATEGY_PROMPT },
     { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
   ]);
 }
@@ -263,7 +277,7 @@ export async function handleContentCommand(text: string) {
       } else if (step === "cta") {
         cta = await ctaAgent(topic);
       } else if (step === "hashtags") {
-        hashtags = await hashtagAgent(topic, normPlatform);
+        hashtags = await hashtagStrategyAgent(topic, normPlatform);
       }
     }
 
