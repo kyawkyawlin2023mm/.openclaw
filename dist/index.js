@@ -72,12 +72,10 @@ bot.on("text", async (ctx) => {
             const parts = text.split(" ").slice(1);
             const platform = (parts[0] || "tiktok").toLowerCase();
             const trends = await (0, trendService_1.getTrends)(platform);
-            if (!trends.length) {
-                await ctx.reply("No trends found. Try again later.");
-                return;
-            }
+            // Always show something (fail-safe)
+            const list = (trends && trends.length ? trends : ["Using fallback ideas"]).slice(0, 10);
             const msg = `🔥 Trending on ${platform}:\n\n` +
-                trends.map((t, i) => `${i + 1}. ${t}`).join("\n");
+                list.map((t, i) => `${i + 1}. ${t}`).join("\n");
             await ctx.reply(msg);
             return;
         }
