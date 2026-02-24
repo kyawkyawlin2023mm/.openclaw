@@ -77,9 +77,9 @@ bot.on("text", async (ctx) => {
 
     if (text.startsWith("/content")) {
       // pass userId so contentFactory can use profile later if needed
-      reply = await handleContentCommand(text);
+      reply = await handleContentCommand(text, userId);
     } else if (text.startsWith("/calendar")) {
-      reply = await handleContentCommand(text);
+      reply = await handleContentCommand(text, userId);
     } else {
       reply = await handleMission(text);
     }
