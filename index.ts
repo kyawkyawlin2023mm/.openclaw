@@ -5,6 +5,7 @@ import { handleContentCommand } from "./contentFactory";
 import { handleCalendarCommand } from "./calendarFactory";
 import { handleMission } from "./missionControl";
 import { getUserProfile, updateUserProfile } from "./userMemory";
+import { getTrends } from "./trendService";
 
 dotenv.config();
 
@@ -72,14 +73,33 @@ bot.on("text", async (ctx) => {
       return;
     }
 
+    // ===== /trend command =====
+    if (text.startsWith("/trend")) {
+      // /trend tiktok | /trend youtube | /trend fb
+      const parts = text.split(" ").slice(1);
+      const platform = (parts[0] || "tiktok").toLowerCase();
+
+      const trends = await getTrends(platform);
+      if (!trends.length) {
+        await ctx.reply("No trends found. Try again later.");
+        return;
+      }
+
+      const msg =
+        `🔥 Trending on ${platform}:\n\n` +
+        trends.map((t, i) => `${i + 1}. ${t}`).join("\n");
+
+      await ctx.reply(msg);
+      return;
+    }
+
     // ===== Other commands =====
     let reply = "";
 
     if (text.startsWith("/content")) {
-      // pass userId so contentFactory can use profile later if needed
       reply = await handleContentCommand(text, userId);
     } else if (text.startsWith("/calendar")) {
-      reply = await handleContentCommand(text, userId);
+      reply = await handleCalendarCommand(text, userId);
     } else {
       reply = await handleMission(text);
     }
