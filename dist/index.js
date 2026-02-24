@@ -5,28 +5,73 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const telegraf_1 = require("telegraf");
 const dotenv_1 = __importDefault(require("dotenv"));
-const missionControl_1 = require("./missionControl");
 const contentFactory_1 = require("./contentFactory");
-const calendarFactory_1 = require("./calendarFactory");
+const missionControl_1 = require("./missionControl");
+const userMemory_1 = require("./userMemory");
 dotenv_1.default.config();
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
-if (!TELEGRAM_TOKEN || !OPENROUTER_KEY) {
-    console.error("❌ Missing env variables");
+if (!TELEGRAM_TOKEN) {
+    console.error("❌ Missing TELEGRAM_BOT_TOKEN");
     process.exit(1);
 }
 const bot = new telegraf_1.Telegraf(TELEGRAM_TOKEN);
-bot.start((ctx) => ctx.reply("🤖 Clawbot is online (Multi-Agent Mode)"));
+bot.start((ctx) => ctx.reply("🤖 Clawbot is online and ready!"));
 bot.on("text", async (ctx) => {
     try {
+        const text = ctx.message.text || "";
+        const userId = String(ctx.from?.id || "unknown");
         await ctx.sendChatAction("typing");
-        const text = ctx.message.text.trim();
-        let reply;
+        // ===== /profile commands =====
+        if (text.startsWith("/profile")) {
+            // /profile set platform tiktok
+            // /profile set niche BMW motorcycles
+            // /profile set tone energetic
+            // /profile set language my
+            // /profile show
+            const parts = text.split(" ").slice(1); // remove /profile
+            const action = parts.shift();
+            if (action === "show") {
+                const profile = (0, userMemory_1.getUserProfile)(userId);
+                await ctx.reply("Your profile:\n" + JSON.stringify(profile, null, 2));
+                return;
+            }
+            if (action === "set") {
+                const key = parts.shift();
+                const value = parts.join(" ");
+                if (!key || !value) {
+                    await ctx.reply("Usage: /profile set platform|niche|tone|language value");
+                    return;
+                }
+                if (key === "language" && (value === "my" || value === "en")) {
+                    (0, userMemory_1.updateUserProfile)(userId, { language: value });
+                }
+                else if (key === "platform") {
+                    (0, userMemory_1.updateUserProfile)(userId, { platform: value });
+                }
+                else if (key === "niche") {
+                    (0, userMemory_1.updateUserProfile)(userId, { niche: value });
+                }
+                else if (key === "tone") {
+                    (0, userMemory_1.updateUserProfile)(userId, { tone: value });
+                }
+                else {
+                    await ctx.reply("Unknown key. Use: language, platform, niche, tone");
+                    return;
+                }
+                await ctx.reply("✅ Profile updated!");
+                return;
+            }
+            await ctx.reply("Usage:\n/profile show\n/profile set platform|niche|tone|language value");
+            return;
+        }
+        // ===== Other commands =====
+        let reply = "";
         if (text.startsWith("/content")) {
+            // pass userId so contentFactory can use profile later if needed
             reply = await (0, contentFactory_1.handleContentCommand)(text);
         }
         else if (text.startsWith("/calendar")) {
-            reply = await (0, calendarFactory_1.handleCalendarCommand)(text);
+            reply = await (0, contentFactory_1.handleContentCommand)(text);
         }
         else {
             reply = await (0, missionControl_1.handleMission)(text);
@@ -35,14 +80,14 @@ bot.on("text", async (ctx) => {
     }
     catch (err) {
         console.error("❌ Runtime error:", err);
-        await ctx.reply("Network or AI error occurred.");
+        await ctx.reply("⚠️ An error occurred. Please try again.");
     }
 });
 bot.catch((err) => {
     console.error("❌ Telegraf error:", err);
 });
 bot.launch().then(() => {
-    console.log("✅ Clawbot running in Multi-Agent mode");
+    console.log("✅ Clawbot is running");
 });
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
