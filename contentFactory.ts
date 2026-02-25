@@ -1,7 +1,7 @@
-// contentFactory.ts (Profile-aware + Trend Inject + Variants + Hashtag Strategy + Critic)
+// contentFactory.ts (Profile-aware + Auto Trend Picker + Variants + Hashtag Strategy + Critic)
 
 import { getUserProfile } from "./userMemory";
-import { getTrends } from "./trendService";
+import { pickBestTrend } from "./trendPicker";
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -183,18 +183,19 @@ export async function handleContentCommand(text: string, userId?: string) {
   if (!topic && profile.niche) topic = profile.niche;
   if (!topic) topic = "general topic";
 
-  // Trend hint
-  let trendHint = "";
-  if (wantsTrend) {
-    const trends = await getTrends(normPlatform);
-    const top = (trends || []).slice(0, 3).join(" | ");
-    if (top) trendHint = `\nCurrent trends: ${top}. Use them as inspiration.\n`;
-  }
-
   const plan = await plannerAgent(`${normPlatform} ${topic}`, lang);
   const audience = plan.audience || "general";
   const tone = plan.tone || profile.tone || "energetic";
   const steps: string[] = plan.steps || ["hook","script","cta","hashtags"];
+
+  // ===== Auto Trend Picker =====
+  let trendHint = "";
+  if (wantsTrend) {
+    const best = await pickBestTrend(topic, audience, normPlatform);
+    if (best) {
+      trendHint = `\nBest trend to use: ${best}. Use it as inspiration.\n`;
+    }
+  }
 
   let outputs: string[] = [];
 

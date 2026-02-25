@@ -1,9 +1,9 @@
 "use strict";
-// calendarFactory.ts (Profile-aware + Trend Inject)
+// calendarFactory.ts (Profile-aware + Auto Trend Picker)
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleCalendarCommand = handleCalendarCommand;
 const userMemory_1 = require("./userMemory");
-const trendService_1 = require("./trendService");
+const trendPicker_1 = require("./trendPicker");
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 async function callOpenRouter(messages) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -109,12 +109,12 @@ async function handleCalendarCommand(text, userId) {
         topic = profile.niche;
     if (!topic)
         topic = "general topic";
+    // ===== Auto Trend Picker per calendar =====
     let trendHint = "";
     if (wantsTrend) {
-        const trends = await (0, trendService_1.getTrends)(normPlatform);
-        const top = (trends || []).slice(0, 3).join(" | ");
-        if (top)
-            trendHint = `\nCurrent trends: ${top}. Use them as inspiration.\n`;
+        const best = await (0, trendPicker_1.pickBestTrend)(topic, "general", normPlatform);
+        if (best)
+            trendHint = `\nBest trend to use: ${best}. Use it as inspiration.\n`;
     }
     const anglesText = await callOpenRouter([
         { role: "system", content: CALENDAR_PLANNER + lang + trendHint },
@@ -133,10 +133,17 @@ async function handleCalendarCommand(text, userId) {
     let outputs = [];
     for (let i = 0; i < angles.length; i++) {
         const dayTopic = angles[i];
-        let hook = await hookAgent(normPlatform, dayTopic, tone, audience, lang, trendHint);
-        let script = await scriptAgent(normPlatform, dayTopic, tone, audience, lang, trendHint);
+        // Pick best trend for each day topic
+        let dayTrendHint = trendHint;
+        if (wantsTrend) {
+            const bestDay = await (0, trendPicker_1.pickBestTrend)(dayTopic, audience, normPlatform);
+            if (bestDay)
+                dayTrendHint = `\nBest trend to use: ${bestDay}. Use it as inspiration.\n`;
+        }
+        let hook = await hookAgent(normPlatform, dayTopic, tone, audience, lang, dayTrendHint);
+        let script = await scriptAgent(normPlatform, dayTopic, tone, audience, lang, dayTrendHint);
         let cta = await ctaAgent(dayTopic, lang);
-        let hashtags = await hashtagAgent(dayTopic, normPlatform, lang, trendHint);
+        let hashtags = await hashtagAgent(dayTopic, normPlatform, lang, dayTrendHint);
         let combined = `
 Day ${i + 1}
 

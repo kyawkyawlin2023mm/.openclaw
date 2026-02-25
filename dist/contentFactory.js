@@ -1,9 +1,9 @@
 "use strict";
-// contentFactory.ts (Profile-aware + Trend Inject + Variants + Hashtag Strategy + Critic)
+// contentFactory.ts (Profile-aware + Auto Trend Picker + Variants + Hashtag Strategy + Critic)
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleContentCommand = handleContentCommand;
 const userMemory_1 = require("./userMemory");
-const trendService_1 = require("./trendService");
+const trendPicker_1 = require("./trendPicker");
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 async function callOpenRouter(messages) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -171,18 +171,18 @@ async function handleContentCommand(text, userId) {
         topic = profile.niche;
     if (!topic)
         topic = "general topic";
-    // Trend hint
-    let trendHint = "";
-    if (wantsTrend) {
-        const trends = await (0, trendService_1.getTrends)(normPlatform);
-        const top = (trends || []).slice(0, 3).join(" | ");
-        if (top)
-            trendHint = `\nCurrent trends: ${top}. Use them as inspiration.\n`;
-    }
     const plan = await plannerAgent(`${normPlatform} ${topic}`, lang);
     const audience = plan.audience || "general";
     const tone = plan.tone || profile.tone || "energetic";
     const steps = plan.steps || ["hook", "script", "cta", "hashtags"];
+    // ===== Auto Trend Picker =====
+    let trendHint = "";
+    if (wantsTrend) {
+        const best = await (0, trendPicker_1.pickBestTrend)(topic, audience, normPlatform);
+        if (best) {
+            trendHint = `\nBest trend to use: ${best}. Use it as inspiration.\n`;
+        }
+    }
     let outputs = [];
     for (let i = 1; i <= variants; i++) {
         let hook = "", script = "", cta = "", hashtags = "";
