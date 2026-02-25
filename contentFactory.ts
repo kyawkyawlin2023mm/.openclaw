@@ -1,7 +1,9 @@
-// contentFactory.ts — Language Purifier + Auto Trend + Hook Booster
+// contentFactory.ts — Pro Content Engine
+// Flags: --trend --short --brand --variants N
 
 import { getUserProfile } from "./userMemory";
 import { pickBestTrend } from "./trendPicker";
+import { pickBestVariant } from "./variantScorer";
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -20,17 +22,12 @@ async function callOpenRouter(messages: ChatMessage[]) {
       max_tokens: 1200,
     }),
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error("OpenRouter error: " + err);
-  }
-
+  if (!res.ok) throw new Error(await res.text());
   const data: any = await res.json();
   return data?.choices?.[0]?.message?.content ?? "";
 }
 
-// ===== Language Rule Builder =====
+// ===== Language Rule =====
 function buildLanguageRule(lang: "my" | "en") {
   if (lang === "my") {
     return "Respond ONLY in Burmese (Myanmar). Do NOT mix English except brand names.";
@@ -38,21 +35,23 @@ function buildLanguageRule(lang: "my" | "en") {
   return "Respond ONLY in English.";
 }
 
-// ===== Prompts =====
-function hookPrompt(langRule: string, trendHint: string) {
+// ===== Prompt builders =====
+function hookPrompt(langRule: string, trendHint: string, shortMode: boolean) {
   return `
-You are a viral content hook writer.
-Write a short, powerful, scroll-stopping hook (1-2 lines).
+You are a viral hook writer.
+${shortMode ? "Write ULTRA-SHORT (1 line) scroll-stopping hook." : "Write a strong 1-2 lines hook."}
+Make it emotional, curiosity-driven.
 ${langRule}
 ${trendHint}
 No labels, no markdown.
 `;
 }
 
-function scriptPrompt(langRule: string, trendHint: string) {
+function scriptPrompt(langRule: string, trendHint: string, brandMode: boolean) {
   return `
 You are a content script writer.
-Write a short, engaging script.
+Write a short engaging script.
+${brandMode ? "Emphasize BMW brand traits: engine feel, control, stability, premium German engineering." : ""}
 ${langRule}
 ${trendHint}
 No labels, no markdown.
@@ -76,52 +75,73 @@ Do not mention AI.
 Output only the final content.
 `;
 
-// ===== Main Handler =====
+// ===== Helpers =====
+function getFlag(text: string, flag: string) {
+  return text.includes(flag);
+}
+
+function getVariantsCount(text: string): number {
+  const m = text.match(/--variants\s+(\d+)/);
+  if (!m) return 1;
+  const n = parseInt(m[1], 10);
+  return isNaN(n) || n < 1 ? 1 : Math.min(n, 5);
+}
+
+// ===== Main =====
 export async function handleContentCommand(text: string, userId: string) {
   const profile = getUserProfile(userId);
   const lang = profile.language || "en";
   const LANGUAGE_RULE = buildLanguageRule(lang);
 
-  const parts = text.split(" ").slice(1); // remove /content
+  const useTrend = getFlag(text, "--trend");
+  const shortMode = getFlag(text, "--short");
+  const brandMode = getFlag(text, "--brand");
+  const variantsN = getVariantsCount(text);
+
+  const parts = text
+    .replace("--trend", "")
+    .replace("--short", "")
+    .replace("--brand", "")
+    .replace(/--variants\s+\d+/g, "")
+    .split(" ")
+    .slice(1); // remove /content
+
   const platform = (parts.shift() || profile.platform || "tiktok").toLowerCase();
   const topic = parts.join(" ") || profile.niche || "general topic";
-
-  const useTrend = text.includes("--trend");
 
   let trendHint = "";
   if (useTrend) {
     const picked = await pickBestTrend(topic, profile.niche || "general", platform);
-    if (picked) {
-      trendHint = `Use this trend angle strongly: ${picked}`;
-    }
+    if (picked) trendHint = `Use this trend angle strongly: ${picked}`;
   }
 
-  // 1) Hook
-  const hook = await callOpenRouter([
-    { role: "system", content: hookPrompt(LANGUAGE_RULE, trendHint) },
-    { role: "user", content: `Topic: ${topic}` },
-  ]);
+  const variants: string[] = [];
 
-  // 2) Script
-  const script = await callOpenRouter([
-    { role: "system", content: scriptPrompt(LANGUAGE_RULE, trendHint) },
-    { role: "user", content: `Topic: ${topic}` },
-  ]);
+  for (let i = 0; i < variantsN; i++) {
+    const hook = await callOpenRouter([
+      { role: "system", content: hookPrompt(LANGUAGE_RULE, trendHint, shortMode) },
+      { role: "user", content: `Topic: ${topic}` },
+    ]);
 
-  // 3) CTA
-  const cta = await callOpenRouter([
-    { role: "system", content: CTA_PROMPT + "\n" + LANGUAGE_RULE },
-    { role: "user", content: topic },
-  ]);
+    const script = await callOpenRouter([
+      {
+        role: "system",
+        content: scriptPrompt(LANGUAGE_RULE, trendHint, brandMode),
+      },
+      { role: "user", content: `Topic: ${topic}` },
+    ]);
 
-  // 4) Hashtags
-  const hashtags = await callOpenRouter([
-    { role: "system", content: HASHTAG_PROMPT },
-    { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
-  ]);
+    const cta = await callOpenRouter([
+      { role: "system", content: CTA_PROMPT + "\n" + LANGUAGE_RULE },
+      { role: "user", content: topic },
+    ]);
 
-  // Combine
-  let combined = `
+    const hashtags = await callOpenRouter([
+      { role: "system", content: HASHTAG_PROMPT },
+      { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
+    ]);
+
+    const combined = `
 Hook:
 ${hook}
 
@@ -135,11 +155,18 @@ Hashtags:
 ${hashtags}
 `;
 
-  // Final edit (with language rule again)
-  const final = await callOpenRouter([
-    { role: "system", content: FINAL_EDITOR + "\n" + LANGUAGE_RULE },
-    { role: "user", content: combined },
-  ]);
+    const final = await callOpenRouter([
+      { role: "system", content: FINAL_EDITOR + "\n" + LANGUAGE_RULE },
+      { role: "user", content: combined },
+    ]);
 
-  return final;
+    variants.push(final);
+  }
+
+  if (variants.length === 1) return variants[0];
+
+  const bestIdx = await pickBestVariant(variants);
+  const best = variants[bestIdx];
+
+  return `✅ Best Version (Auto-picked)\n\n${best}`;
 }
