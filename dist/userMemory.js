@@ -1,36 +1,32 @@
 "use strict";
-// userMemory.ts (Profile + Performance Memory)
+// userMemory.ts
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserProfile = getUserProfile;
 exports.updateUserProfile = updateUserProfile;
 exports.markGood = markGood;
 exports.markBad = markBad;
-const store = {};
+const memory = new Map();
 function getUserProfile(userId) {
-    if (!store[userId]) {
-        store[userId] = {
+    if (!memory.has(userId)) {
+        memory.set(userId, {
+            language: "en",
             likes: 0,
             dislikes: 0,
-            preferredStyles: [],
-        };
+        });
     }
-    return store[userId];
+    return memory.get(userId);
 }
-function updateUserProfile(userId, patch) {
-    const cur = getUserProfile(userId);
-    store[userId] = { ...cur, ...patch };
+function updateUserProfile(userId, updates) {
+    const current = getUserProfile(userId);
+    memory.set(userId, { ...current, ...updates });
 }
 function markGood(userId) {
     const p = getUserProfile(userId);
     p.likes = (p.likes || 0) + 1;
-    // reinforce styles
-    const styles = new Set(p.preferredStyles || []);
-    styles.add("short-hook");
-    styles.add("energetic");
-    styles.add("POV");
-    p.preferredStyles = Array.from(styles);
+    memory.set(userId, p);
 }
 function markBad(userId) {
     const p = getUserProfile(userId);
     p.dislikes = (p.dislikes || 0) + 1;
+    memory.set(userId, p);
 }

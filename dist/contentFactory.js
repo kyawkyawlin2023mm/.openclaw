@@ -1,5 +1,5 @@
 "use strict";
-// contentFactory.ts (All-in-one Upgrade)
+// contentFactory.ts — Language Purifier + Auto Trend + Hook Booster
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleContentCommand = handleContentCommand;
 const userMemory_1 = require("./userMemory");
@@ -16,7 +16,7 @@ async function callOpenRouter(messages) {
             model: "openai/gpt-4.1",
             messages,
             temperature: 0.7,
-            max_tokens: 800,
+            max_tokens: 1200,
         }),
     });
     if (!res.ok) {
@@ -26,193 +26,84 @@ async function callOpenRouter(messages) {
     const data = await res.json();
     return data?.choices?.[0]?.message?.content ?? "";
 }
-// ===== Language Purifier =====
-function languageRule(profileLang) {
-    if (profileLang === "my") {
-        return `
-Respond ONLY in Burmese (Myanmar).
-Do NOT mix English unless it is a brand name (e.g., BMW, TikTok).
-Keep language clean and consistent.
-`;
+// ===== Language Rule Builder =====
+function buildLanguageRule(lang) {
+    if (lang === "my") {
+        return "Respond ONLY in Burmese (Myanmar). Do NOT mix English except brand names.";
     }
-    if (profileLang === "en") {
-        return `
-Respond ONLY in English.
-Do NOT mix other languages unless it is a brand name.
-`;
-    }
-    return `
-Match the user's language.
-Do not mix languages unless it is a brand name.
-`;
+    return "Respond ONLY in English.";
 }
 // ===== Prompts =====
-const PLANNER_PROMPT = `
-You are a Content Planner Agent.
-Return JSON:
-- platform: "tiktok" | "youtube" | "facebook"
-- audience
-- tone
-- steps: ["hook","script","cta","hashtags"]
-Return ONLY JSON.
+function hookPrompt(langRule, trendHint) {
+    return `
+You are a viral content hook writer.
+Write a short, powerful, scroll-stopping hook (1-2 lines).
+${langRule}
+${trendHint}
+No labels, no markdown.
 `;
-const TIKTOK_HOOK = `
-You are a TikTok Hook Writer.
-Make it scroll-stopping, emotional, curiosity-driven.
-Keep it short and punchy.
-No labels.
+}
+function scriptPrompt(langRule, trendHint) {
+    return `
+You are a content script writer.
+Write a short, engaging script.
+${langRule}
+${trendHint}
+No labels, no markdown.
 `;
-const TIKTOK_SCRIPT = `You are a TikTok Script Writer. Write a 30-60s script. No labels.`;
-const YT_HOOK = `You are a YouTube Title/Hook Writer. Make it clickable. No labels.`;
-const YT_SCRIPT = `You are a YouTube Script Writer. Short intro, 3-5 points, outro. No labels.`;
-const FB_HOOK = `You are a Facebook Post Opener. Friendly and engaging. No labels.`;
-const FB_SCRIPT = `You are a Facebook Post Writer. Short story + question. No labels.`;
-const CTA_PROMPT = `Write 2-3 short CTA lines. No labels.`;
-const HASHTAG_STRATEGY_PROMPT = `
-Generate hashtags in THREE groups:
-
-Reach: #tag #tag #tag
-Niche: #tag #tag #tag
-Branded: #tag #tag #tag
-
-Rules:
-- 4-6 per group
-- Output exactly in this format
-- No extra text
+}
+const CTA_PROMPT = `
+Write 2-3 short call-to-action lines.
+No labels, no markdown.
 `;
-const UX_PROMPT = `
-Format exactly:
-
-Hook:
-Script:
-CTA:
-Hashtags:
+const HASHTAG_PROMPT = `
+Generate 8-12 relevant hashtags.
+Output only hashtags separated by spaces.
 `;
 const FINAL_EDITOR = `
-Clean, concise, natural.
-Output only final content.
+You are a final editor.
+Clean up, remove repetition, keep it natural and punchy.
+Do not mention AI.
+Output only the final content.
 `;
-const CRITIC_PROMPT = `
-You are a Content Critic.
-Score versions and recommend the best.
-Keep concise.
-`;
-// ===== Agents =====
-async function plannerAgent(input, lang) {
-    const reply = await callOpenRouter([
-        { role: "system", content: PLANNER_PROMPT + lang },
-        { role: "user", content: input },
-    ]);
-    try {
-        return JSON.parse(reply);
+// ===== Main Handler =====
+async function handleContentCommand(text, userId) {
+    const profile = (0, userMemory_1.getUserProfile)(userId);
+    const lang = profile.language || "en";
+    const LANGUAGE_RULE = buildLanguageRule(lang);
+    const parts = text.split(" ").slice(1); // remove /content
+    const platform = (parts.shift() || profile.platform || "tiktok").toLowerCase();
+    const topic = parts.join(" ") || profile.niche || "general topic";
+    const useTrend = text.includes("--trend");
+    let trendHint = "";
+    if (useTrend) {
+        const picked = await (0, trendPicker_1.pickBestTrend)(topic, profile.niche || "general", platform);
+        if (picked) {
+            trendHint = `Use this trend angle strongly: ${picked}`;
+        }
     }
-    catch {
-        return { platform: "tiktok", audience: "general", tone: "energetic", steps: ["hook", "script", "cta", "hashtags"] };
-    }
-}
-async function hookAgent(platform, topic, tone, audience, lang, trendHint, memoryHint) {
-    let sys = TIKTOK_HOOK;
-    if (platform === "youtube")
-        sys = YT_HOOK;
-    if (platform === "facebook")
-        sys = FB_HOOK;
-    return callOpenRouter([
-        { role: "system", content: sys + lang + trendHint + memoryHint },
-        { role: "user", content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}` },
+    // 1) Hook
+    const hook = await callOpenRouter([
+        { role: "system", content: hookPrompt(LANGUAGE_RULE, trendHint) },
+        { role: "user", content: `Topic: ${topic}` },
     ]);
-}
-async function scriptAgent(platform, topic, tone, audience, lang, trendHint, memoryHint) {
-    let sys = TIKTOK_SCRIPT;
-    if (platform === "youtube")
-        sys = YT_SCRIPT;
-    if (platform === "facebook")
-        sys = FB_SCRIPT;
-    return callOpenRouter([
-        { role: "system", content: sys + lang + trendHint + memoryHint },
-        { role: "user", content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}` },
+    // 2) Script
+    const script = await callOpenRouter([
+        { role: "system", content: scriptPrompt(LANGUAGE_RULE, trendHint) },
+        { role: "user", content: `Topic: ${topic}` },
     ]);
-}
-async function ctaAgent(topic, lang) {
-    return callOpenRouter([{ role: "system", content: CTA_PROMPT + lang }, { role: "user", content: topic }]);
-}
-async function hashtagAgent(topic, platform, lang, trendHint) {
-    return callOpenRouter([
-        { role: "system", content: HASHTAG_STRATEGY_PROMPT + lang + trendHint },
+    // 3) CTA
+    const cta = await callOpenRouter([
+        { role: "system", content: CTA_PROMPT + "\n" + LANGUAGE_RULE },
+        { role: "user", content: topic },
+    ]);
+    // 4) Hashtags
+    const hashtags = await callOpenRouter([
+        { role: "system", content: HASHTAG_PROMPT },
         { role: "user", content: `Platform: ${platform}\nTopic: ${topic}` },
     ]);
-}
-async function uxAgent(content, lang) {
-    return callOpenRouter([{ role: "system", content: UX_PROMPT + lang }, { role: "user", content: content }]);
-}
-async function finalEditor(content, lang) {
-    return callOpenRouter([{ role: "system", content: FINAL_EDITOR + lang }, { role: "user", content: content }]);
-}
-async function criticAgent(variantsText, lang) {
-    return callOpenRouter([{ role: "system", content: CRITIC_PROMPT + lang }, { role: "user", content: variantsText }]);
-}
-// ===== Main =====
-async function handleContentCommand(text, userId) {
-    const raw = text;
-    const wantsTrend = /--trend/i.test(raw);
-    let variants = 1;
-    const vMatch = raw.match(/--variants\s+(\d+)/i);
-    if (vMatch)
-        variants = Math.max(1, Math.min(5, parseInt(vMatch[1], 10) || 1));
-    const wantsScore = /--score/i.test(raw);
-    const cleaned = raw.replace(/--trend/i, "").replace(/--variants\s+\d+/i, "").replace(/--score/i, "").trim();
-    const parts = cleaned.split(" ").slice(1); // remove /content
-    const profile = userId ? (0, userMemory_1.getUserProfile)(String(userId)) : {};
-    const lang = languageRule(profile.language);
-    const known = ["tiktok", "youtube", "facebook", "fb"];
-    let platformInput = (parts[0] || "").toLowerCase();
-    let platform;
-    if (known.includes(platformInput)) {
-        platform = platformInput;
-        parts.shift();
-    }
-    else if (profile.platform)
-        platform = profile.platform;
-    else
-        platform = "tiktok";
-    const normPlatform = platform === "fb" ? "facebook" : platform;
-    let topic = parts.join(" ").trim();
-    if (!topic && profile.niche)
-        topic = profile.niche;
-    if (!topic)
-        topic = "general topic";
-    const plan = await plannerAgent(`${normPlatform} ${topic}`, lang);
-    const audience = plan.audience || "general";
-    const tone = plan.tone || profile.tone || "energetic";
-    const steps = plan.steps || ["hook", "script", "cta", "hashtags"];
-    // ===== Performance Memory Hint =====
-    let memoryHint = "";
-    if (profile.preferredStyles && profile.preferredStyles.length) {
-        memoryHint = `\nUser prefers these styles: ${profile.preferredStyles.join(", ")}. Try to follow them.\n`;
-    }
-    // ===== Auto Trend Picker =====
-    let trendHint = "";
-    if (wantsTrend) {
-        const best = await (0, trendPicker_1.pickBestTrend)(topic, audience, normPlatform);
-        if (best) {
-            trendHint = `\nBest trend to use: ${best}. Use it as inspiration.\n`;
-        }
-    }
-    let outputs = [];
-    for (let i = 1; i <= variants; i++) {
-        let hook = "", script = "", cta = "", hashtags = "";
-        for (const step of steps) {
-            if (step === "hook")
-                hook = await hookAgent(normPlatform, topic, tone, audience, lang, trendHint, memoryHint);
-            else if (step === "script")
-                script = await scriptAgent(normPlatform, topic, tone, audience, lang, trendHint, memoryHint);
-            else if (step === "cta")
-                cta = await ctaAgent(topic, lang);
-            else if (step === "hashtags")
-                hashtags = await hashtagAgent(topic, normPlatform, lang, trendHint);
-        }
-        let combined = `
-Version ${i}
-
+    // Combine
+    let combined = `
 Hook:
 ${hook}
 
@@ -225,14 +116,10 @@ ${cta}
 Hashtags:
 ${hashtags}
 `;
-        combined = await uxAgent(combined, lang);
-        combined = await finalEditor(combined, lang);
-        outputs.push(combined);
-    }
-    const joined = outputs.join("\n\n--------------------\n\n");
-    if (variants > 1 && wantsScore) {
-        const scores = await criticAgent(joined, lang);
-        return joined + "\n\n====================\n\n" + scores;
-    }
-    return joined;
+    // Final edit (with language rule again)
+    const final = await callOpenRouter([
+        { role: "system", content: FINAL_EDITOR + "\n" + LANGUAGE_RULE },
+        { role: "user", content: combined },
+    ]);
+    return final;
 }
