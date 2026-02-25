@@ -27,25 +27,20 @@ async function callOpenRouter(messages) {
 }
 const PICKER_PROMPT = `
 You are a Trend Picker.
-Given:
-- Topic
-- Audience
-- Platform
-- A list of trends
-
-Task:
-- Pick the SINGLE best trend that fits the topic and audience for the platform.
-- Return ONLY the exact trend text.
-- No explanations, no quotes, no extra words.
+Pick the SINGLE best trend that fits the topic and audience for the platform.
+Return ONLY the exact trend text.
+No explanations.
 `;
 async function pickBestTrend(topic, audience, platform) {
     const trends = await (0, trendService_1.getTrends)(platform);
     if (!trends || !trends.length)
         return null;
-    // If only one, return it
     if (trends.length === 1)
         return trends[0];
-    const list = trends.slice(0, 10).map((t, i) => `${i + 1}. ${t}`).join("\n");
+    const list = trends
+        .slice(0, 10)
+        .map((t, i) => `${i + 1}. ${t}`)
+        .join("\n");
     try {
         const reply = await callOpenRouter([
             { role: "system", content: PICKER_PROMPT },
@@ -55,12 +50,11 @@ async function pickBestTrend(topic, audience, platform) {
             },
         ]);
         const picked = (reply || "").trim();
-        // Validate: must be one of the trends
         const found = trends.find((t) => t.toLowerCase() === picked.toLowerCase());
-        return found || trends[0]; // fallback to first
+        return found || trends[0];
     }
     catch (e) {
         console.error("Trend picker error:", e);
-        return trends[0]; // safe fallback
+        return trends[0];
     }
 }

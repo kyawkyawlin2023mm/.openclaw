@@ -31,16 +31,9 @@ async function callOpenRouter(messages: ChatMessage[]) {
 
 const PICKER_PROMPT = `
 You are a Trend Picker.
-Given:
-- Topic
-- Audience
-- Platform
-- A list of trends
-
-Task:
-- Pick the SINGLE best trend that fits the topic and audience for the platform.
-- Return ONLY the exact trend text.
-- No explanations, no quotes, no extra words.
+Pick the SINGLE best trend that fits the topic and audience for the platform.
+Return ONLY the exact trend text.
+No explanations.
 `;
 
 export async function pickBestTrend(
@@ -48,13 +41,14 @@ export async function pickBestTrend(
   audience: string,
   platform: string
 ): Promise<string | null> {
-  const trends = await getTrends(platform);
+  const trends: string[] = await getTrends(platform);
   if (!trends || !trends.length) return null;
-
-  // If only one, return it
   if (trends.length === 1) return trends[0];
 
-  const list = trends.slice(0, 10).map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const list = trends
+    .slice(0, 10)
+    .map((t: string, i: number) => `${i + 1}. ${t}`)
+    .join("\n");
 
   try {
     const reply = await callOpenRouter([
@@ -66,12 +60,10 @@ export async function pickBestTrend(
     ]);
 
     const picked = (reply || "").trim();
-
-    // Validate: must be one of the trends
-    const found = trends.find((t) => t.toLowerCase() === picked.toLowerCase());
-    return found || trends[0]; // fallback to first
+    const found = trends.find((t: string) => t.toLowerCase() === picked.toLowerCase());
+    return found || trends[0];
   } catch (e) {
     console.error("Trend picker error:", e);
-    return trends[0]; // safe fallback
+    return trends[0];
   }
 }

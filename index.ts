@@ -6,6 +6,7 @@ import { handleCalendarCommand } from "./calendarFactory";
 import { handleMission } from "./missionControl";
 import { getUserProfile, updateUserProfile } from "./userMemory";
 import { getTrends } from "./trendService";
+import { markGood, markBad } from "./userMemory";
 
 dotenv.config();
 
@@ -86,7 +87,7 @@ bot.on("text", async (ctx) => {
 
       const msg =
         `🔥 Trending on ${platform}:\n\n` +
-        list.map((t, i) => `${i + 1}. ${t}`).join("\n");
+       list.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n");
 
       await ctx.reply(msg);
       return;
@@ -95,6 +96,17 @@ bot.on("text", async (ctx) => {
     // ===== Other commands =====
     let reply = "";
 
+// ===== /good /bad feedback =====
+if (text === "/good") {
+  markGood(userId);
+  await ctx.reply("✅ Noted! I’ll try to generate more like this next time.");
+  return;
+}
+if (text === "/bad") {
+  markBad(userId);
+  await ctx.reply("📝 Got it. I’ll adjust my style.");
+  return;
+}
     if (text.startsWith("/content")) {
       reply = await handleContentCommand(text, userId);
     } else if (text.startsWith("/calendar")) {

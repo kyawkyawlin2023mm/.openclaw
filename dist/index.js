@@ -10,6 +10,7 @@ const calendarFactory_1 = require("./calendarFactory");
 const missionControl_1 = require("./missionControl");
 const userMemory_1 = require("./userMemory");
 const trendService_1 = require("./trendService");
+const userMemory_2 = require("./userMemory");
 dotenv_1.default.config();
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TELEGRAM_TOKEN) {
@@ -81,6 +82,17 @@ bot.on("text", async (ctx) => {
         }
         // ===== Other commands =====
         let reply = "";
+        // ===== /good /bad feedback =====
+        if (text === "/good") {
+            (0, userMemory_2.markGood)(userId);
+            await ctx.reply("✅ Noted! I’ll try to generate more like this next time.");
+            return;
+        }
+        if (text === "/bad") {
+            (0, userMemory_2.markBad)(userId);
+            await ctx.reply("📝 Got it. I’ll adjust my style.");
+            return;
+        }
         if (text.startsWith("/content")) {
             reply = await (0, contentFactory_1.handleContentCommand)(text, userId);
         }

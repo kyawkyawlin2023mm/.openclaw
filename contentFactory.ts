@@ -1,4 +1,4 @@
-// contentFactory.ts (Profile-aware + Auto Trend Picker + Variants + Hashtag Strategy + Critic)
+// contentFactory.ts (All-in-one Upgrade)
 
 import { getUserProfile } from "./userMemory";
 import { pickBestTrend } from "./trendPicker";
@@ -30,42 +30,54 @@ async function callOpenRouter(messages: ChatMessage[]) {
   return data?.choices?.[0]?.message?.content ?? "";
 }
 
-// ===== Language helper =====
-const BASE_LANGUAGE_RULE = `
-If the user writes in Burmese (Myanmar), respond in Burmese.
-If the user writes in English, respond in English.
-Always match the user's language.
+// ===== Language Purifier =====
+function languageRule(profileLang?: "my" | "en") {
+  if (profileLang === "my") {
+    return `
+Respond ONLY in Burmese (Myanmar).
+Do NOT mix English unless it is a brand name (e.g., BMW, TikTok).
+Keep language clean and consistent.
 `;
-
-function languageHint(profileLang?: "my" | "en") {
-  if (profileLang === "my") return "\nRespond in Burmese (Myanmar).\n";
-  if (profileLang === "en") return "\nRespond in English.\n";
-  return "\n" + BASE_LANGUAGE_RULE + "\n";
+  }
+  if (profileLang === "en") {
+    return `
+Respond ONLY in English.
+Do NOT mix other languages unless it is a brand name.
+`;
+  }
+  return `
+Match the user's language.
+Do not mix languages unless it is a brand name.
+`;
 }
 
 // ===== Prompts =====
 const PLANNER_PROMPT = `
 You are a Content Planner Agent.
-Analyze the user's request and return a JSON plan with:
+Return JSON:
 - platform: "tiktok" | "youtube" | "facebook"
-- audience: e.g., "beginners" | "bikers" | "youth" | "general"
-- tone: e.g., "energetic" | "friendly" | "professional"
-- steps: array from ["hook","script","cta","hashtags"]
-
-Return ONLY valid JSON. No explanations.
+- audience
+- tone
+- steps: ["hook","script","cta","hashtags"]
+Return ONLY JSON.
 `;
 
-const TIKTOK_HOOK = `You are a TikTok Hook Writer. Create a short, punchy hook. No labels.`;
+const TIKTOK_HOOK = `
+You are a TikTok Hook Writer.
+Make it scroll-stopping, emotional, curiosity-driven.
+Keep it short and punchy.
+No labels.
+`;
+
 const TIKTOK_SCRIPT = `You are a TikTok Script Writer. Write a 30-60s script. No labels.`;
-const YT_HOOK = `You are a YouTube Title/Hook Writer. Title + opening hook. No labels.`;
+const YT_HOOK = `You are a YouTube Title/Hook Writer. Make it clickable. No labels.`;
 const YT_SCRIPT = `You are a YouTube Script Writer. Short intro, 3-5 points, outro. No labels.`;
-const FB_HOOK = `You are a Facebook Post Opener. Friendly opening. No labels.`;
+const FB_HOOK = `You are a Facebook Post Opener. Friendly and engaging. No labels.`;
 const FB_SCRIPT = `You are a Facebook Post Writer. Short story + question. No labels.`;
 
-const CTA_PROMPT = `You are a CTA Writer. Write 2-3 short CTA lines. No labels.`;
+const CTA_PROMPT = `Write 2-3 short CTA lines. No labels.`;
 
 const HASHTAG_STRATEGY_PROMPT = `
-You are a Hashtag Strategist.
 Generate hashtags in THREE groups:
 
 Reach: #tag #tag #tag
@@ -79,8 +91,7 @@ Rules:
 `;
 
 const UX_PROMPT = `
-You are a UX Formatter.
-Structure exactly:
+Format exactly:
 
 Hook:
 Script:
@@ -89,8 +100,8 @@ Hashtags:
 `;
 
 const FINAL_EDITOR = `
-You are a Final Editor.
-Clean, concise, natural. Output only final content.
+Clean, concise, natural.
+Output only final content.
 `;
 
 const CRITIC_PROMPT = `
@@ -112,22 +123,22 @@ async function plannerAgent(input: string, lang: string) {
   }
 }
 
-async function hookAgent(platform: string, topic: string, tone: string, audience: string, lang: string, trendHint: string) {
+async function hookAgent(platform: string, topic: string, tone: string, audience: string, lang: string, trendHint: string, memoryHint: string) {
   let sys = TIKTOK_HOOK;
   if (platform === "youtube") sys = YT_HOOK;
   if (platform === "facebook") sys = FB_HOOK;
   return callOpenRouter([
-    { role: "system", content: sys + lang + trendHint },
+    { role: "system", content: sys + lang + trendHint + memoryHint },
     { role: "user", content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}` },
   ]);
 }
 
-async function scriptAgent(platform: string, topic: string, tone: string, audience: string, lang: string, trendHint: string) {
+async function scriptAgent(platform: string, topic: string, tone: string, audience: string, lang: string, trendHint: string, memoryHint: string) {
   let sys = TIKTOK_SCRIPT;
   if (platform === "youtube") sys = YT_SCRIPT;
   if (platform === "facebook") sys = FB_SCRIPT;
   return callOpenRouter([
-    { role: "system", content: sys + lang + trendHint },
+    { role: "system", content: sys + lang + trendHint + memoryHint },
     { role: "user", content: `Topic: ${topic}\nAudience: ${audience}\nTone: ${tone}` },
   ]);
 }
@@ -169,7 +180,7 @@ export async function handleContentCommand(text: string, userId?: string) {
   const parts = cleaned.split(" ").slice(1); // remove /content
 
   const profile = userId ? getUserProfile(String(userId)) : {};
-  const lang = languageHint(profile.language);
+  const lang = languageRule(profile.language);
 
   const known = ["tiktok","youtube","facebook","fb"];
   let platformInput = (parts[0] || "").toLowerCase();
@@ -188,6 +199,12 @@ export async function handleContentCommand(text: string, userId?: string) {
   const tone = plan.tone || profile.tone || "energetic";
   const steps: string[] = plan.steps || ["hook","script","cta","hashtags"];
 
+  // ===== Performance Memory Hint =====
+  let memoryHint = "";
+  if (profile.preferredStyles && profile.preferredStyles.length) {
+    memoryHint = `\nUser prefers these styles: ${profile.preferredStyles.join(", ")}. Try to follow them.\n`;
+  }
+
   // ===== Auto Trend Picker =====
   let trendHint = "";
   if (wantsTrend) {
@@ -202,8 +219,8 @@ export async function handleContentCommand(text: string, userId?: string) {
   for (let i = 1; i <= variants; i++) {
     let hook = "", script = "", cta = "", hashtags = "";
     for (const step of steps) {
-      if (step === "hook") hook = await hookAgent(normPlatform, topic, tone, audience, lang, trendHint);
-      else if (step === "script") script = await scriptAgent(normPlatform, topic, tone, audience, lang, trendHint);
+      if (step === "hook") hook = await hookAgent(normPlatform, topic, tone, audience, lang, trendHint, memoryHint);
+      else if (step === "script") script = await scriptAgent(normPlatform, topic, tone, audience, lang, trendHint, memoryHint);
       else if (step === "cta") cta = await ctaAgent(topic, lang);
       else if (step === "hashtags") hashtags = await hashtagAgent(topic, normPlatform, lang, trendHint);
     }
